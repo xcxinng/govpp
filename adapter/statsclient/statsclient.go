@@ -45,6 +45,11 @@ const socketMissing = `
 ------------------------------------------------------------
 `
 
+const (
+	vpcRxDir = "/vpc/vpc_rx"
+	vpcTxDir = "/vpc/vpc_tx"
+)
+
 var (
 	// Debug is global variable that determines debug mode
 	Debug = os.Getenv("DEBUG_GOVPP_STATS") != ""
@@ -342,4 +347,101 @@ func (c *StatsClient) dumpEntries(indexes []uint32) (entries []adapter.StatEntry
 	}
 
 	return entries, nil
+}
+
+func (c *StatsClient) DumpVPCStats(vni ...uint64) (entries []adapter.StatEntry,err error) {
+	indexes,err := c.listIndexes([]string{vpcRxDir,vpcTxDir}...)
+	if err != nil {
+		return
+	}
+
+	dirVector := c.getStatDirVector()
+	dirLen := uint32(vectorLen(dirVector))
+
+	debugf("dumping entres for %d indexes", len(indexes))
+
+	entries = make([]adapter.StatEntry, 0, len(indexes))
+	for _, index := range indexes {
+		if index >= dirLen {
+			return nil, fmt.Errorf("stat entry index %d out of dir vector length (%d)", index, dirLen)
+		}
+
+		dirEntry := c.getStatDirIndex(dirVector, index)
+
+		var name []byte
+		for n := 0; n < len(dirEntry.name); n++ {
+			if dirEntry.name[n] == 0 {
+				name = dirEntry.name[:n]
+				break
+			}
+		}
+
+		if Debug {
+			debugf(" - %3d. dir: %q type: %v offset: %d union: %d", index, name,
+				adapter.StatType(dirEntry.directoryType), dirEntry.offsetVector, dirEntry.unionData)
+		}
+
+		if len(name) == 0 {
+			continue
+		}
+		data,err := c.copyEntryWithVni(dirEntry,vni)
+		if err != nil {
+			return
+		}
+		entry := adapter.StatEntry{
+			Name: append([]byte(nil), name...),
+			Type: adapter.StatType(dirEntry.directoryType),
+			Data: data,
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
+type VPCCounter struct {
+	InBytes    uint64 `json:"in_bytes"`
+	InPackets  uint64 `json:"in_packets"`
+	OutBytes   uint64 `json:"out_bytes"`
+	OutPackets uint64 `json:"out_packets"`
+}
+
+// GetVPCStats returns the summed statistical value of each thread
+func (c *StatsClient) GetVPCStats(stats []adapter.StatEntry, vni ...uint64) (map[uint64]*VPCCounter, error) {
+	if len(stats) != 2 {
+		return nil, nil
+	}
+	rxEntry := stats[0]
+	txEntry := stats[1]
+	rxStats, ok1 := rxEntry.Data.(adapter.VPCCombinedCounterStats)
+	txStats, ok2 := txEntry.Data.(adapter.VPCCombinedCounterStats)
+	if !ok1 || !ok2 {
+		return nil, fmt.Errorf("StatEntry.Data assert to 'adapter.VPCCombinedCounterStats' failed")
+	}
+
+	dataMap := make(map[uint64]*VPCCounter)
+	for i := range rxStats {
+		for index := range vni {
+			v := rxStats[i][index].Vni()
+			inBytes := rxStats[i][index].Bytes()
+			inPackets := rxStats[i][index].Packets()
+			outBytes := txStats[i][index].Bytes()
+			outPackets := txStats[i][index].Packets()
+			if _, ok := dataMap[v]; ok {
+				dataMap[v].InBytes += inBytes
+				dataMap[v].InPackets += inPackets
+				dataMap[v].OutBytes += outBytes
+				dataMap[v].OutPackets += outPackets
+			} else {
+				counter := &VPCCounter{
+					InBytes:    inBytes,
+					InPackets:  inPackets,
+					OutBytes:   outBytes,
+					OutPackets: outPackets,
+				}
+				dataMap[v] = counter
+			}
+		}
+	}
+	return dataMap, nil
 }

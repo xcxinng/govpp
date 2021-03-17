@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 var (
 	statsSocket = flag.String("socket", statsclient.DefaultSocketName, "Path to VPP stats socket")
 	dumpAll     = flag.Bool("all", false, "Dump all stats including ones with zero values")
+	vpcVni      = flag.String("vni", "", "Dump VPC stats by vni")
 	pollPeriod  = flag.Duration("period", time.Second*5, "Polling interval period")
 )
 
@@ -129,6 +131,10 @@ func main() {
 		}
 		fmt.Printf("Buffer stats: %+v\n", stats)
 
+	case "dump_vpc":
+		fmt.Printf("Dumping VPC stats.. %s\n", vpcVni)
+		dumpVPCStats(client, SplitVni(*vpcVni), skipZeros)
+
 	case "dump":
 		fmt.Printf("Dumping stats.. %s\n", strings.Join(patterns, " "))
 
@@ -147,6 +153,20 @@ func main() {
 	default:
 		fmt.Printf("invalid command: %q\n", cmd)
 	}
+}
+
+func SplitVni(s string) (ret []uint64) {
+	vs := strings.Split(s, ",")
+	for _, v := range vs {
+		vni, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			fmt.Printf("parse uint64 vni error,,%v\n(Is vni input valid ?)", err)
+			break
+		} else {
+			ret = append(ret, vni)
+		}
+	}
+	return
 }
 
 func listStats(client adapter.StatsAPI, patterns []string) {
@@ -257,4 +277,24 @@ func pollInterfaces(client api.StatsProvider) {
 			}
 		}
 	}
+}
+
+func dumpVPCStats(client adapter.StatsAPI, vni []uint64, skipZeros bool) {
+	if len(vni) == 0 {
+		return
+	}
+	stats, err := client.DumpVPCStats(vni...)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	n := 0
+	for _, stat := range stats {
+		if skipZeros && (stat.Data == nil || stat.Data.IsZero()) {
+			continue
+		}
+		fmt.Printf(" - %-50s %25v %+v\n", stat.Name, stat.Type, stat.Data)
+		n++
+	}
+
+	fmt.Printf("Dumped %d (%d) stats\n", n, len(stats))
 }

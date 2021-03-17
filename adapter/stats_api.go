@@ -41,6 +41,8 @@ type StatsAPI interface {
 	ListStats(patterns ...string) (names []string, err error)
 	// DumpStats dumps all stat entries.
 	DumpStats(patterns ...string) (entries []StatEntry, err error)
+	// DumpVPCStats dumps vpc stat entries by vni
+	DumpVPCStats(vni ...uint64) (entries []StatEntry, err error)
 
 	// PrepareDir prepares new stat dir for entries that match any of prefixes.
 	PrepareDir(patterns ...string) (*StatDir, error)
@@ -104,6 +106,20 @@ func (s CombinedCounter) Packets() uint64 {
 
 func (s CombinedCounter) Bytes() uint64 {
 	return uint64(s[1])
+}
+
+type CombinedCounterVNI [3]uint64
+
+func (s CombinedCounterVNI) Packets() uint64 {
+	return s[0]
+}
+
+func (s CombinedCounterVNI) Bytes() uint64 {
+	return s[1]
+}
+
+func (s CombinedCounterVNI) Vni() uint64 {
+	return s[2]
 }
 
 // Name represents string value stored under name vector.
@@ -213,4 +229,26 @@ func ReduceCombinedCounterStatIndex(s CombinedCounterStat, i int) [2]uint64 {
 		val[1] += uint64(w[i][1])
 	}
 	return val
+}
+
+// VPCCombinedCounterStats is similar to CombinedCounterStats,Only one more vni element
+type VPCCombinedCounterStats [][]CombinedCounterVNI
+
+func (VPCCombinedCounterStats) isStat() {}
+
+func (s VPCCombinedCounterStats) IsZero() bool {
+	if s == nil {
+		return true
+	}
+	for _, ss := range s {
+		if ss == nil {
+			return true
+		}
+		for _, sss := range ss {
+			if sss[0] != 0 || sss[1] != 0 {
+				return false
+			}
+		}
+	}
+	return true
 }

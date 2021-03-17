@@ -192,6 +192,46 @@ func (c *statSegment) getStatDirIndex(p unsafe.Pointer, index uint32) *statSegDi
 	return (*statSegDirectoryEntry)(unsafe.Pointer(uintptr(p) + uintptr(index)*unsafe.Sizeof(statSegDirectoryEntry{})))
 }
 
+func (c *statSegment) copyEntryWithVni(dirEntry *statSegDirectoryEntry, vni []uint64) (adapter.Stat, error) {
+	if len(vni) == 0 {
+		return nil, fmt.Errorf("vni empty")
+	}
+	dirType := adapter.StatType(dirEntry.directoryType)
+	if dirType != statDirCounterVectorCombined {
+		return nil, fmt.Errorf("get error type:%s,expected combinedVectorCounter", dirType)
+	}
+	if dirEntry.unionData == 0 {
+		return nil, fmt.Errorf("offset invalid for %s", dirEntry.name)
+	} else if dirEntry.unionData >= uint64(len(c.sharedHeader)) {
+		return nil, fmt.Errorf("offset out of range for %s", dirEntry.name)
+	}
+
+	vecLen := uint32(vectorLen(unsafe.Pointer(&c.sharedHeader[dirEntry.unionData])))
+	offsetVector := statSegPointer(unsafe.Pointer(&c.sharedHeader[0]), uintptr(dirEntry.offsetVector))
+
+	data := make([][]adapter.CombinedCounterVNI, vecLen)
+	for i := uint32(0); i < vecLen; i++ {
+		cb := *(*uint64)(statSegPointer(offsetVector, uintptr(i)*unsafe.Sizeof(uint64(0))))
+		counterVec := unsafe.Pointer(&c.sharedHeader[uintptr(cb)])
+		vecLen2 := vectorLen(counterVec)
+		data[i] = make([]adapter.CombinedCounterVNI, 0)
+		for _, v := range vni {
+			if v < vecLen2 {
+				offset := uintptr(v) * unsafe.Sizeof(adapter.CombinedCounter{})
+				val := *(*adapter.CombinedCounter)(statSegPointer(counterVec, offset))
+				newVal := adapter.CombinedCounterVNI{}
+				newVal[0] = val.Packets()
+				newVal[1] = val.Bytes()
+				newVal[2] = v
+				data[i] = append(data[i], newVal)
+			} else {
+				return nil, fmt.Errorf("get wrong vni:%d", v)
+			}
+		}
+	}
+	return adapter.VPCCombinedCounterStats(data), nil
+}
+
 func (c *statSegment) copyEntryData(dirEntry *statSegDirectoryEntry) adapter.Stat {
 	dirType := adapter.StatType(dirEntry.directoryType)
 
