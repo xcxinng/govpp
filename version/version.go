@@ -23,7 +23,7 @@ import (
 
 var (
 	name        = "govpp"
-	version     = "v0.3.7"
+	version     = "v0.3.8"
 	commitHash  = "unknown"
 	buildBranch = "HEAD"
 	buildStamp  = ""
