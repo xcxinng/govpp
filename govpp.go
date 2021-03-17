@@ -17,9 +17,9 @@ package govpp
 import (
 	"time"
 
-	"git.fd.io/govpp.git/adapter"
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/core"
+	"github.com/xcxinng/govpp/adapter"
+	"github.com/xcxinng/govpp/adapter/socketclient"
+	"github.com/xcxinng/govpp/core"
 )
 
 var (

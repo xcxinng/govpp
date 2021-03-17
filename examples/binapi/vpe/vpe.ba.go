@@ -19,10 +19,10 @@ import (
 	"io"
 	"strconv"
 
-	api "git.fd.io/govpp.git/api"
+	api "github.com/xcxinng/govpp/api"
 	struc "github.com/lunixbochs/struc"
 
-	vpe_types "git.fd.io/govpp.git/examples/binapi/vpe_types"
+	vpe_types "github.com/xcxinng/govpp/examples/binapi/vpe_types"
 )
 
 const (

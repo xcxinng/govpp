@@ -24,11 +24,11 @@ import (
 	"log"
 	"strings"
 
-	"git.fd.io/govpp.git"
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/api"
-	"git.fd.io/govpp.git/examples/binapi/interfaces"
-	"git.fd.io/govpp.git/examples/binapi/vpe"
+	"github.com/xcxinng/govpp"
+	"github.com/xcxinng/govpp/adapter/socketclient"
+	"github.com/xcxinng/govpp/api"
+	"github.com/xcxinng/govpp/examples/binapi/interfaces"
+	"github.com/xcxinng/govpp/examples/binapi/vpe"
 )
 
 var (

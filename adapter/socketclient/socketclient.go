@@ -30,8 +30,8 @@ import (
 	"github.com/lunixbochs/struc"
 	logger "github.com/sirupsen/logrus"
 
-	"git.fd.io/govpp.git/adapter"
-	"git.fd.io/govpp.git/codec"
+	"github.com/xcxinng/govpp/adapter"
+	"github.com/xcxinng/govpp/codec"
 )
 
 const (

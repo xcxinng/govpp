@@ -17,7 +17,7 @@
 package vppapiclient
 
 import (
-	"git.fd.io/govpp.git/adapter"
+	"github.com/xcxinng/govpp/adapter"
 )
 
 // stubVppClient is just an stub adapter that does nothing. It builds only on Windows and OSX, where the real

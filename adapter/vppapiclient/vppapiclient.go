@@ -34,7 +34,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"git.fd.io/govpp.git/adapter"
+	"github.com/xcxinng/govpp/adapter"
 )
 
 var (

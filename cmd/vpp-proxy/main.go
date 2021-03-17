@@ -21,13 +21,13 @@ import (
 	"io"
 	"log"
 
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/adapter/statsclient"
-	"git.fd.io/govpp.git/api"
-	_ "git.fd.io/govpp.git/core"
-	"git.fd.io/govpp.git/examples/binapi/interfaces"
-	"git.fd.io/govpp.git/examples/binapi/vpe"
-	"git.fd.io/govpp.git/proxy"
+	"github.com/xcxinng/govpp/adapter/socketclient"
+	"github.com/xcxinng/govpp/adapter/statsclient"
+	"github.com/xcxinng/govpp/api"
+	_ "github.com/xcxinng/govpp/core"
+	"github.com/xcxinng/govpp/examples/binapi/interfaces"
+	"github.com/xcxinng/govpp/examples/binapi/vpe"
+	"github.com/xcxinng/govpp/proxy"
 )
 
 var (

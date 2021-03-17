@@ -19,12 +19,12 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"git.fd.io/govpp.git/adapter/mock"
-	"git.fd.io/govpp.git/api"
-	"git.fd.io/govpp.git/codec"
-	"git.fd.io/govpp.git/core"
-	"git.fd.io/govpp.git/examples/binapi/interfaces"
-	"git.fd.io/govpp.git/examples/binapi/vpe"
+	"github.com/xcxinng/govpp/adapter/mock"
+	"github.com/xcxinng/govpp/api"
+	"github.com/xcxinng/govpp/codec"
+	"github.com/xcxinng/govpp/core"
+	"github.com/xcxinng/govpp/examples/binapi/interfaces"
+	"github.com/xcxinng/govpp/examples/binapi/vpe"
 )
 
 type testCtx struct {

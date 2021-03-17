@@ -23,15 +23,15 @@ import (
 	"os"
 	"strings"
 
-	"git.fd.io/govpp.git"
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/api"
-	"git.fd.io/govpp.git/core"
-	"git.fd.io/govpp.git/examples/binapi/interface_types"
-	"git.fd.io/govpp.git/examples/binapi/interfaces"
-	"git.fd.io/govpp.git/examples/binapi/ip"
-	"git.fd.io/govpp.git/examples/binapi/ip_types"
-	"git.fd.io/govpp.git/examples/binapi/vpe"
+	"github.com/xcxinng/govpp"
+	"github.com/xcxinng/govpp/adapter/socketclient"
+	"github.com/xcxinng/govpp/api"
+	"github.com/xcxinng/govpp/core"
+	"github.com/xcxinng/govpp/examples/binapi/interface_types"
+	"github.com/xcxinng/govpp/examples/binapi/interfaces"
+	"github.com/xcxinng/govpp/examples/binapi/ip"
+	"github.com/xcxinng/govpp/examples/binapi/ip_types"
+	"github.com/xcxinng/govpp/examples/binapi/vpe"
 )
 
 var (

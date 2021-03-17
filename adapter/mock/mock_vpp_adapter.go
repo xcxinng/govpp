@@ -22,10 +22,10 @@ import (
 	"reflect"
 	"sync"
 
-	"git.fd.io/govpp.git/adapter"
-	"git.fd.io/govpp.git/adapter/mock/binapi"
-	"git.fd.io/govpp.git/api"
-	"git.fd.io/govpp.git/codec"
+	"github.com/xcxinng/govpp/adapter"
+	"github.com/xcxinng/govpp/adapter/mock/binapi"
+	"github.com/xcxinng/govpp/api"
+	"github.com/xcxinng/govpp/codec"
 	"github.com/lunixbochs/struc"
 )
 

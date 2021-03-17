@@ -23,7 +23,7 @@ import (
 
 	logger "github.com/sirupsen/logrus"
 
-	"git.fd.io/govpp.git/adapter"
+	"github.com/xcxinng/govpp/adapter"
 )
 
 const (

@@ -18,7 +18,7 @@ import (
 	"io"
 	"strconv"
 
-	api "git.fd.io/govpp.git/api"
+	api "github.com/xcxinng/govpp/api"
 	struc "github.com/lunixbochs/struc"
 )
 
