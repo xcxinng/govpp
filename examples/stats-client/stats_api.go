@@ -132,7 +132,7 @@ func main() {
 		fmt.Printf("Buffer stats: %+v\n", stats)
 
 	case "dump_vpc":
-		fmt.Printf("Dumping VPC stats.. %s\n", vpcVni)
+		fmt.Printf("Dumping VPC stats.. %s\n", *vpcVni)
 		dumpVPCStats(client, SplitVni(*vpcVni), skipZeros)
 
 	case "dump":

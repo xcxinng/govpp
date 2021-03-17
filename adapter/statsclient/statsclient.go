@@ -386,7 +386,7 @@ func (c *StatsClient) DumpVPCStats(vni ...uint64) (entries []adapter.StatEntry,e
 		}
 		data,err := c.copyEntryWithVni(dirEntry,vni)
 		if err != nil {
-			return
+			return nil,err
 		}
 		entry := adapter.StatEntry{
 			Name: append([]byte(nil), name...),
