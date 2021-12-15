@@ -57,35 +57,35 @@ type InterfaceStats struct {
 
 // InterfaceCounters represents interface counters.
 type InterfaceCounters struct {
-	InterfaceIndex uint32
-	InterfaceName  string // requires VPP 19.04+
+	InterfaceIndex uint32 `json:"interface_index"`
+	InterfaceName  string `json:"interface_name"` // requires VPP 19.04+
 
-	Rx InterfaceCounterCombined
-	Tx InterfaceCounterCombined
+	Rx InterfaceCounterCombined `json:"rx"`
+	Tx InterfaceCounterCombined `json:"tx"`
 
-	RxErrors uint64
-	TxErrors uint64
+	RxErrors uint64 `json:"rx_errors"`
+	TxErrors uint64 `json:"tx_errors"`
 
-	RxUnicast   InterfaceCounterCombined
-	RxMulticast InterfaceCounterCombined
-	RxBroadcast InterfaceCounterCombined
-	TxUnicast   InterfaceCounterCombined
-	TxMulticast InterfaceCounterCombined
-	TxBroadcast InterfaceCounterCombined
+	RxUnicast   InterfaceCounterCombined `json:"rx_unicast"`
+	RxMulticast InterfaceCounterCombined `json:"rx_multicast"`
+	RxBroadcast InterfaceCounterCombined `json:"rx_broadcast"`
+	TxUnicast   InterfaceCounterCombined `json:"tx_unicast"`
+	TxMulticast InterfaceCounterCombined `json:"tx_multicast"`
+	TxBroadcast InterfaceCounterCombined `json:"tx_broadcast"`
 
-	Drops   uint64
-	Punts   uint64
-	IP4     uint64
-	IP6     uint64
-	RxNoBuf uint64
-	RxMiss  uint64
-	Mpls    uint64
+	Drops   uint64 `json:"drops"`
+	Punts   uint64 `json:"punts"`
+	IP4     uint64 `json:"ip4"`
+	IP6     uint64 `json:"ip6"`
+	RxNoBuf uint64 `json:"rx_no_buf"`
+	RxMiss  uint64 `json:"rx_miss"`
+	Mpls    uint64 `json:"mpls"`
 }
 
 // InterfaceCounterCombined defines combined counters for interfaces.
 type InterfaceCounterCombined struct {
-	Packets uint64
-	Bytes   uint64
+	Packets uint64 `json:"packets"`
+	Bytes   uint64 `json:"bytes"`
 }
 
 // ErrorStats represents statistics per error counter.
