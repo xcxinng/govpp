@@ -24,16 +24,17 @@ import (
 	"os"
 	"time"
 
-	"git.fd.io/govpp.git"
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/api"
-	interfaces "git.fd.io/govpp.git/binapi/interface"
-	"git.fd.io/govpp.git/binapi/interface_types"
-	"git.fd.io/govpp.git/binapi/ip"
-	"git.fd.io/govpp.git/binapi/ip_types"
-	"git.fd.io/govpp.git/binapi/mactime"
-	"git.fd.io/govpp.git/binapi/vpe"
-	"git.fd.io/govpp.git/core"
+	"go.fd.io/govpp"
+	"go.fd.io/govpp/adapter/socketclient"
+	"go.fd.io/govpp/api"
+	interfaces "go.fd.io/govpp/binapi/interface"
+	"go.fd.io/govpp/binapi/interface_types"
+	"go.fd.io/govpp/binapi/ip"
+	"go.fd.io/govpp/binapi/ip_types"
+	"go.fd.io/govpp/binapi/mactime"
+	"go.fd.io/govpp/binapi/memclnt"
+	"go.fd.io/govpp/binapi/vpe"
+	"go.fd.io/govpp/core"
 )
 
 var (
@@ -157,7 +158,7 @@ func interfaceDumpStream(stream api.Stream) {
 		logError(err, "SwInterfaceDump sending message")
 		return
 	}
-	if err := stream.SendMsg(&vpe.ControlPing{}); err != nil {
+	if err := stream.SendMsg(&memclnt.ControlPing{}); err != nil {
 		logError(err, "ControlPing sending message")
 		return
 	}
@@ -174,7 +175,7 @@ Loop:
 		case *interfaces.SwInterfaceDetails:
 			fmt.Printf(" - SwInterfaceDetails: %+v\n", msg)
 
-		case *vpe.ControlPingReply:
+		case *memclnt.ControlPingReply:
 			fmt.Printf(" - ControlPingReply: %+v\n", msg)
 			break Loop
 
@@ -227,7 +228,7 @@ func ipAddressDumpStream(stream api.Stream, index interface_types.InterfaceIndex
 		logError(err, "IPAddressDump sending message")
 		return
 	}
-	if err := stream.SendMsg(&vpe.ControlPing{}); err != nil {
+	if err := stream.SendMsg(&memclnt.ControlPing{}); err != nil {
 		logError(err, "ControlPing sending sending message")
 		return
 	}
@@ -244,7 +245,7 @@ Loop:
 		case *ip.IPAddressDetails:
 			fmt.Printf(" - IPAddressDetails: %+v\n", msg)
 
-		case *vpe.ControlPingReply:
+		case *memclnt.ControlPingReply:
 			fmt.Printf(" - ControlPingReply: %+v\n", msg)
 			break Loop
 
@@ -260,7 +261,7 @@ Loop:
 
 // Mactime dump uses MactimeDumpReply message as an end of the stream
 // notification instead of the control ping.
-func mactimeDump(stream api.Stream, ) {
+func mactimeDump(stream api.Stream) {
 	fmt.Println("Sending mactime dump..")
 
 	if err := stream.SendMsg(&mactime.MactimeDump{}); err != nil {

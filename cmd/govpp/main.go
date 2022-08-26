@@ -28,11 +28,12 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"git.fd.io/govpp.git"
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/binapi/vpe"
-	"git.fd.io/govpp.git/binapigen"
-	"git.fd.io/govpp.git/binapigen/vppapi"
+	"go.fd.io/govpp"
+	"go.fd.io/govpp/adapter/socketclient"
+	"go.fd.io/govpp/binapi/vlib"
+	"go.fd.io/govpp/binapi/vpe"
+	"go.fd.io/govpp/binapigen"
+	"go.fd.io/govpp/binapigen/vppapi"
 )
 
 func main() {
@@ -154,8 +155,8 @@ func sendCLI(args []string) {
 		log.Fatal(err)
 	}
 
-	client := vpe.NewServiceClient(conn)
-	reply, err := client.CliInband(context.Background(), &vpe.CliInband{
+	client := vlib.NewServiceClient(conn)
+	reply, err := client.CliInband(context.Background(), &vlib.CliInband{
 		Cmd: cmd,
 	})
 	if err != nil {

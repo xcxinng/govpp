@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	api "git.fd.io/govpp.git/api"
-	vpe "git.fd.io/govpp.git/binapi/vpe"
+	api "go.fd.io/govpp/api"
+	memclnt "go.fd.io/govpp/binapi/memclnt"
 )
 
 // RPCService defines RPC service teib.
@@ -34,7 +34,7 @@ func (c *serviceClient) TeibDump(ctx context.Context, in *TeibDump) (RPCService_
 	if err := x.Stream.SendMsg(in); err != nil {
 		return nil, err
 	}
-	if err = x.Stream.SendMsg(&vpe.ControlPing{}); err != nil {
+	if err = x.Stream.SendMsg(&memclnt.ControlPing{}); err != nil {
 		return nil, err
 	}
 	return x, nil
@@ -57,7 +57,7 @@ func (c *serviceClient_TeibDumpClient) Recv() (*TeibDetails, error) {
 	switch m := msg.(type) {
 	case *TeibDetails:
 		return m, nil
-	case *vpe.ControlPingReply:
+	case *memclnt.ControlPingReply:
 		err = c.Stream.Close()
 		if err != nil {
 			return nil, err

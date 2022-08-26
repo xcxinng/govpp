@@ -20,14 +20,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"git.fd.io/govpp.git"
-	"git.fd.io/govpp.git/adapter/socketclient"
-	"git.fd.io/govpp.git/api"
-	interfaces "git.fd.io/govpp.git/binapi/interface"
-	"git.fd.io/govpp.git/binapi/interface_types"
-	"git.fd.io/govpp.git/binapi/ip_types"
-	"git.fd.io/govpp.git/binapi/vpe"
-	"git.fd.io/govpp.git/core"
+	"go.fd.io/govpp"
+	"go.fd.io/govpp/adapter/socketclient"
+	"go.fd.io/govpp/api"
+	interfaces "go.fd.io/govpp/binapi/interface"
+	"go.fd.io/govpp/binapi/interface_types"
+	"go.fd.io/govpp/binapi/ip_types"
+	"go.fd.io/govpp/binapi/memclnt"
+	"go.fd.io/govpp/binapi/vpe"
+	"go.fd.io/govpp/core"
 	"log"
 )
 
@@ -318,7 +319,7 @@ func invokeInterfaceDump(c api.Connection) {
 		fmt.Printf("ERROR: %v\n", err)
 		return
 	}
-	if err := s.SendMsg(&vpe.ControlPing{}); err != nil {
+	if err := s.SendMsg(&memclnt.ControlPing{}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 		return
 	}
@@ -331,7 +332,7 @@ func invokeInterfaceDump(c api.Connection) {
 		switch msg := reply.(type) {
 		case *interfaces.SwInterfaceDetails:
 			fmt.Printf(" - retrieved interface: %v (idx: %d)\n", msg.InterfaceName, msg.SwIfIndex)
-		case *vpe.ControlPingReply:
+		case *memclnt.ControlPingReply:
 			return
 		}
 	}

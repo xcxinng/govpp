@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"git.fd.io/govpp.git/adapter"
-	"git.fd.io/govpp.git/api"
+	"go.fd.io/govpp/adapter"
+	"go.fd.io/govpp/api"
 )
 
 var (
@@ -39,9 +39,11 @@ const (
 
 	CounterStatsPrefix = "/err/"
 
-	MemoryStatPrefix  = "/mem/statseg"
-	MemoryStats_Total = "total"
-	MemoryStats_Used  = "used"
+	MemoryStatSegPrefix = "/mem/statseg"
+	MemoryStatSegment   = "/mem/stat segment"
+	MemoryMainHeap      = "/mem/main heap"
+	MemoryStats_Total   = "total"
+	MemoryStats_Used    = "used"
 
 	InterfaceStatsPrefix         = "/if/"
 	InterfaceStats_Names         = InterfaceStatsPrefix + "names"
@@ -301,9 +303,6 @@ func (c *StatsConnection) GetErrorStats(errorStats *api.ErrorStats) (err error) 
 	}
 
 	for i, stat := range c.errorStatsData.Entries {
-		if stat.Type != adapter.ErrorIndex {
-			continue
-		}
 		if errStat, ok := stat.Data.(adapter.ErrorStat); ok {
 			values := make([]uint64, len(errStat))
 			for j, errStatW := range errStat {
@@ -311,8 +310,16 @@ func (c *StatsConnection) GetErrorStats(errorStats *api.ErrorStats) (err error) 
 			}
 			errorStats.Errors[i].Values = values
 		}
+		if errStat, ok := stat.Data.(adapter.SimpleCounterStat); ok {
+			values := make([]uint64, len(errStat))
+			for j, errStatW := range errStat {
+				for _, val := range errStatW {
+					values[j] += uint64(val)
+				}
+			}
+			errorStats.Errors[i].Values = values
+		}
 	}
-
 	return nil
 }
 
@@ -545,22 +552,50 @@ func (c *StatsConnection) GetBufferStats(bufStats *api.BufferStats) (err error) 
 }
 
 func (c *StatsConnection) GetMemoryStats(memStats *api.MemoryStats) (err error) {
-	if err := c.updateStats(&c.memStatsData, MemoryStatPrefix); err != nil {
+	if err := c.updateStats(&c.memStatsData, MemoryStatSegPrefix, MemoryStatSegment, MemoryMainHeap); err != nil {
 		return err
+	}
+	convertStats := func(stats []adapter.Counter) api.MemoryCounters {
+		memUsg := make([]adapter.Counter, 7)
+		copy(memUsg, stats)
+		return api.MemoryCounters{
+			Total: uint64(memUsg[0]), Used: uint64(memUsg[1]), Free: uint64(memUsg[2]), UsedMMap: uint64(memUsg[3]),
+			TotalAlloc: uint64(memUsg[4]), FreeChunks: uint64(memUsg[5]), Releasable: uint64(memUsg[6]),
+		}
 	}
 
 	for _, stat := range c.memStatsData.Entries {
-		_, f := path.Split(string(stat.Name))
-		var val float64
-		m, ok := stat.Data.(adapter.ScalarStat)
-		if ok {
-			val = float64(m)
-		}
-		switch f {
-		case MemoryStats_Total:
-			memStats.Total = val
-		case MemoryStats_Used:
-			memStats.Used = val
+		if strings.Contains(string(stat.Name), MemoryStatSegPrefix) {
+			_, f := path.Split(string(stat.Name))
+			var val float64
+			m, ok := stat.Data.(adapter.ScalarStat)
+			if ok {
+				val = float64(m)
+			}
+			switch f {
+			case MemoryStats_Total:
+				memStats.Total = val
+			case MemoryStats_Used:
+				memStats.Used = val
+			}
+		} else if string(stat.Name) == MemoryStatSegment {
+			if perHeapStats, ok := stat.Data.(adapter.SimpleCounterStat); ok {
+				if memStats.Stat == nil {
+					memStats.Stat = make(map[int]api.MemoryCounters)
+				}
+				for heap, stats := range perHeapStats {
+					memStats.Stat[heap] = convertStats(stats)
+				}
+			}
+		} else if string(stat.Name) == MemoryMainHeap {
+			if perHeapStats, ok := stat.Data.(adapter.SimpleCounterStat); ok {
+				if memStats.Main == nil {
+					memStats.Main = make(map[int]api.MemoryCounters)
+				}
+				for heap, stats := range perHeapStats {
+					memStats.Main[heap] = convertStats(stats)
+				}
+			}
 		}
 	}
 	return nil

@@ -19,7 +19,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"git.fd.io/govpp.git/adapter"
+	"go.fd.io/govpp/adapter"
 )
 
 type statSegmentV1 struct {
@@ -75,7 +75,7 @@ func (ss *statSegmentV1) getErrorVector() (unsafe.Pointer, error) {
 	return nil, fmt.Errorf("error vector is not defined for stats API v1")
 }
 
-func (ss *statSegmentV1) GetStatDirOnIndex(v dirVector, index uint32) (dirSegment, dirName, dirType) {
+func (ss *statSegmentV1) GetStatDirOnIndex(v dirVector, index uint32) (dirSegment, dirName, adapter.StatType) {
 	statSegDir := dirSegment(uintptr(v) + uintptr(index)*unsafe.Sizeof(statSegDirectoryEntryV1{}))
 	dir := (*statSegDirectoryEntryV1)(statSegDir)
 	var name []byte
@@ -85,7 +85,7 @@ func (ss *statSegmentV1) GetStatDirOnIndex(v dirVector, index uint32) (dirSegmen
 			break
 		}
 	}
-	return statSegDir, dirName(name), dir.directoryType
+	return statSegDir, name, getStatType(dir.directoryType, true)
 }
 
 func (ss *statSegmentV1) GetEpoch() (int64, bool) {
@@ -95,17 +95,14 @@ func (ss *statSegmentV1) GetEpoch() (int64, bool) {
 
 func (ss *statSegmentV1) CopyEntryData(segment dirSegment, _ uint32) adapter.Stat {
 	dirEntry := (*statSegDirectoryEntryV1)(segment)
-	dirType := adapter.StatType(dirEntry.directoryType)
+	typ := getStatType(dirEntry.directoryType, true)
 
-	switch dirType {
-	case statDirScalarIndex:
+	switch typ {
+	case adapter.ScalarIndex:
 		return adapter.ScalarStat(dirEntry.unionData)
 
-	case statDirErrorIndex:
-		if dirEntry.unionData == 0 {
-			debugf("offset invalid for %s", dirEntry.name)
-			break
-		} else if dirEntry.unionData >= uint64(len(ss.sharedHeader)) {
+	case adapter.ErrorIndex:
+		if dirEntry.unionData >= uint64(len(ss.sharedHeader)) {
 			debugf("offset out of range for %s", dirEntry.name)
 			break
 		}
@@ -125,7 +122,7 @@ func (ss *statSegmentV1) CopyEntryData(segment dirSegment, _ uint32) adapter.Sta
 		}
 		return adapter.ErrorStat(errData)
 
-	case statDirCounterVectorSimple:
+	case adapter.SimpleCounterVector:
 		if dirEntry.unionData == 0 {
 			debugf("offset invalid for %s", dirEntry.name)
 			break
@@ -151,7 +148,7 @@ func (ss *statSegmentV1) CopyEntryData(segment dirSegment, _ uint32) adapter.Sta
 		}
 		return adapter.SimpleCounterStat(data)
 
-	case statDirCounterVectorCombined:
+	case adapter.CombinedCounterVector:
 		if dirEntry.unionData == 0 {
 			debugf("offset invalid for %s", dirEntry.name)
 			break
@@ -177,7 +174,7 @@ func (ss *statSegmentV1) CopyEntryData(segment dirSegment, _ uint32) adapter.Sta
 		}
 		return adapter.CombinedCounterStat(data)
 
-	case statDirNameVector:
+	case adapter.NameVector:
 		if dirEntry.unionData == 0 {
 			debugf("offset invalid for %s", dirEntry.name)
 			break
@@ -211,10 +208,10 @@ func (ss *statSegmentV1) CopyEntryData(segment dirSegment, _ uint32) adapter.Sta
 		}
 		return adapter.NameStat(data)
 
-	case statDirEmpty:
+	case adapter.Empty:
 		// no-op
 
-	case statDirSymlink:
+	case adapter.Symlink:
 		debugf("Symlinks are not supported for stats v1")
 
 	default:

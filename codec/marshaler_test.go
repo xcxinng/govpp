@@ -19,11 +19,12 @@ import (
 	"reflect"
 	"testing"
 
-	"git.fd.io/govpp.git/api"
-	"git.fd.io/govpp.git/binapi/ip_types"
-	"git.fd.io/govpp.git/binapi/sr"
-	"git.fd.io/govpp.git/codec"
-	interfaces "git.fd.io/govpp.git/internal/testbinapi/binapi2001/interface"
+	"go.fd.io/govpp/api"
+	"go.fd.io/govpp/binapi/ip_types"
+	"go.fd.io/govpp/binapi/sr"
+	"go.fd.io/govpp/codec"
+	interfaces "go.fd.io/govpp/binapi/interface"
+	"go.fd.io/govpp/binapi/interface_types"
 )
 
 // CliInband represents VPP binary API message 'cli_inband'.
@@ -101,7 +102,7 @@ func TestWrapperDecode(t *testing.T) {
 
 func TestNewCodecEncodeDecode4(t *testing.T) {
 	m := &interfaces.SwInterfaceSetRxMode{
-		Mode:         interfaces.RX_MODE_API_POLLING,
+		Mode:         interface_types.RX_MODE_API_POLLING,
 		QueueID:      70000,
 		QueueIDValid: true,
 		SwIfIndex:    300,

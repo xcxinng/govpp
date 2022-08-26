@@ -21,15 +21,15 @@ import (
 	"strconv"
 	"strings"
 
-	"git.fd.io/govpp.git/internal/version"
+	"go.fd.io/govpp/version"
 )
 
 // library dependencies
 const (
 	strconvPkg = GoImportPath("strconv")
 
-	govppApiPkg   = GoImportPath("git.fd.io/govpp.git/api")
-	govppCodecPkg = GoImportPath("git.fd.io/govpp.git/codec")
+	govppApiPkg   = GoImportPath("go.fd.io/govpp/api")
+	govppCodecPkg = GoImportPath("go.fd.io/govpp/codec")
 )
 
 // generated names
@@ -90,14 +90,12 @@ func GenerateAPI(gen *Generator, file *File) *GenFile {
 	g.P("const _ = ", govppApiPkg.Ident("GoVppAPIPackageIsVersion"), generatedCodeVersion)
 	g.P()
 
-	if !file.isTypesFile() {
-		g.P("const (")
-		g.P(apiName, " = ", strconv.Quote(g.file.Desc.Name))
-		g.P(apiVersion, " = ", strconv.Quote(g.file.Version))
-		g.P(apiCrc, " = ", g.file.Desc.CRC)
-		g.P(")")
-		g.P()
-	}
+	g.P("const (")
+	g.P(apiName, " = ", strconv.Quote(g.file.Desc.Name))
+	g.P(apiVersion, " = ", strconv.Quote(g.file.Version))
+	g.P(apiCrc, " = ", g.file.Desc.CRC)
+	g.P(")")
+	g.P()
 
 	for _, enum := range g.file.Enums {
 		genEnum(g, enum)

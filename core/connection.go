@@ -25,9 +25,9 @@ import (
 
 	logger "github.com/sirupsen/logrus"
 
-	"git.fd.io/govpp.git/adapter"
-	"git.fd.io/govpp.git/api"
-	"git.fd.io/govpp.git/codec"
+	"go.fd.io/govpp/adapter"
+	"go.fd.io/govpp/api"
+	"go.fd.io/govpp/codec"
 )
 
 const (
@@ -216,14 +216,18 @@ func (c *Connection) Disconnect() {
 		return
 	}
 	if c.vppClient != nil {
-		c.disconnectVPP()
+		c.disconnectVPP(true)
 	}
 }
 
-// disconnectVPP disconnects from VPP in case it is connected.
-func (c *Connection) disconnectVPP() {
+// disconnectVPP disconnects from VPP in case it is connected. terminate tells
+// that disconnectVPP() was called from Close(), so healthCheckLoop() can be
+// terminated.
+func (c *Connection) disconnectVPP(terminate bool) {
 	if atomic.CompareAndSwapUint32(&c.vppConnected, 1, 0) {
-		close(c.healthCheckDone)
+		if terminate {
+			close(c.healthCheckDone)
+		}
 		log.Debug("Disconnecting from VPP..")
 
 		if err := c.vppClient.Disconnect(); err != nil {
@@ -383,7 +387,7 @@ HealthCheck:
 	}
 
 	// cleanup
-	c.disconnectVPP()
+	c.disconnectVPP(false)
 
 	// we are now disconnected, start connect loop
 	c.connectLoop()
