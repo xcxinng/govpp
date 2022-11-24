@@ -9,9 +9,9 @@
 //
 // To create a connection of two raw-data instances, run two processes
 // concurrently:
-//  - master memif:
+//   - master memif:
 //     $ ./raw-data
-//  - slave memif:
+//   - slave memif:
 //     $ ./raw-data --slave
 //
 // Every 3 seconds both sides send 3 raw-data packets to the opposite end through
@@ -212,6 +212,7 @@ func main() {
 			Secret:         Secret,
 			IsMaster:       isMaster,
 			Mode:           libmemif.IfModeEthernet,
+			AppName:        appName,
 		},
 		MemifShmSpecs: libmemif.MemifShmSpecs{
 			NumRxQueues:  NumQueues,

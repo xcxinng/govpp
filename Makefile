@@ -17,9 +17,9 @@ VPP_API_DIR ?= ${VPP_DIR}/build-root/install-vpp-native/vpp/share/vpp/api
 VERSION_PKG := $(GOVPP_PKG)/version
 LDFLAGS = \
 	-X $(VERSION_PKG).version=$(VERSION) \
-	-X $(VERSION_PKG).commitHash=$(COMMIT) \
+	-X $(VERSION_PKG).commit=$(COMMIT) \
+	-X $(VERSION_PKG).branch=$(BUILD_BRANCH) \
 	-X $(VERSION_PKG).buildStamp=$(BUILD_STAMP) \
-	-X $(VERSION_PKG).buildBranch=$(BUILD_BRANCH) \
 	-X $(VERSION_PKG).buildUser=$(BUILD_USER) \
 	-X $(VERSION_PKG).buildHost=$(BUILD_HOST)
 
@@ -40,8 +40,10 @@ ifeq ($(V),1)
 GO_BUILD_ARGS += -v
 endif
 
+# Package cloud repo for VPP.
+VPP_REPO		  ?= release
 # VPP Docker image to use for api generation (gen-binapi-docker)
-VPP_IMG 	      ?= ligato/vpp-base:latest
+VPP_IMG 	      ?= ligato/vpp-base:22.06-release
 # Local VPP directory used for binary api generation (gen-binapi-from-code)
 VPP_DIR           ?=
 # Target directory for generated go api bindings
@@ -80,12 +82,14 @@ test: ## Run unit tests
 .PHONY: test-integration
 test-integration: ## Run integration tests
 	@echo "# running integration tests"
-	go test -tags="integration ${GO_BUILD_TAGS}" ./test/integration
+	VPP_REPO=$(VPP_REPO) ./test/run_integration.sh
 
-.PHONY: lint
-lint: ## Run code linter
-	@echo "# running linter"
-	@golint ./...
+.PHONY: lint ## Run code linter
+lint:
+	@gofmt -s -l . | diff -u /dev/null -
+	@go vet ./...
+	@golangci-lint run
+	@echo "Done"
 
 .PHONY: install
 install: install-generator install-proxy ## Install all

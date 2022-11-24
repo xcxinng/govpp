@@ -13,6 +13,7 @@ import (
 // RPCService defines RPC service pnat.
 type RPCService interface {
 	PnatBindingAdd(ctx context.Context, in *PnatBindingAdd) (*PnatBindingAddReply, error)
+	PnatBindingAddV2(ctx context.Context, in *PnatBindingAddV2) (*PnatBindingAddV2Reply, error)
 	PnatBindingAttach(ctx context.Context, in *PnatBindingAttach) (*PnatBindingAttachReply, error)
 	PnatBindingDel(ctx context.Context, in *PnatBindingDel) (*PnatBindingDelReply, error)
 	PnatBindingDetach(ctx context.Context, in *PnatBindingDetach) (*PnatBindingDetachReply, error)
@@ -30,6 +31,15 @@ func NewServiceClient(conn api.Connection) RPCService {
 
 func (c *serviceClient) PnatBindingAdd(ctx context.Context, in *PnatBindingAdd) (*PnatBindingAddReply, error) {
 	out := new(PnatBindingAddReply)
+	err := c.conn.Invoke(ctx, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, api.RetvalToVPPApiError(out.Retval)
+}
+
+func (c *serviceClient) PnatBindingAddV2(ctx context.Context, in *PnatBindingAddV2) (*PnatBindingAddV2Reply, error) {
+	out := new(PnatBindingAddV2Reply)
 	err := c.conn.Invoke(ctx, in, out)
 	if err != nil {
 		return nil, err
@@ -77,7 +87,7 @@ func (c *serviceClient) PnatBindingsGet(ctx context.Context, in *PnatBindingsGet
 }
 
 type RPCService_PnatBindingsGetClient interface {
-	Recv() (*PnatBindingsDetails, error)
+	Recv() (*PnatBindingsDetails, *PnatBindingsGetReply, error)
 	api.Stream
 }
 
@@ -85,22 +95,25 @@ type serviceClient_PnatBindingsGetClient struct {
 	api.Stream
 }
 
-func (c *serviceClient_PnatBindingsGetClient) Recv() (*PnatBindingsDetails, error) {
+func (c *serviceClient_PnatBindingsGetClient) Recv() (*PnatBindingsDetails, *PnatBindingsGetReply, error) {
 	msg, err := c.Stream.RecvMsg()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	switch m := msg.(type) {
 	case *PnatBindingsDetails:
-		return m, nil
+		return m, nil, nil
 	case *PnatBindingsGetReply:
+		if err := api.RetvalToVPPApiError(m.Retval); err != nil {
+			return nil, nil, err
+		}
 		err = c.Stream.Close()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return nil, io.EOF
+		return nil, m, io.EOF
 	default:
-		return nil, fmt.Errorf("unexpected message: %T %v", m, m)
+		return nil, nil, fmt.Errorf("unexpected message: %T %v", m, m)
 	}
 }
 
@@ -117,7 +130,7 @@ func (c *serviceClient) PnatInterfacesGet(ctx context.Context, in *PnatInterface
 }
 
 type RPCService_PnatInterfacesGetClient interface {
-	Recv() (*PnatInterfacesDetails, error)
+	Recv() (*PnatInterfacesDetails, *PnatInterfacesGetReply, error)
 	api.Stream
 }
 
@@ -125,21 +138,24 @@ type serviceClient_PnatInterfacesGetClient struct {
 	api.Stream
 }
 
-func (c *serviceClient_PnatInterfacesGetClient) Recv() (*PnatInterfacesDetails, error) {
+func (c *serviceClient_PnatInterfacesGetClient) Recv() (*PnatInterfacesDetails, *PnatInterfacesGetReply, error) {
 	msg, err := c.Stream.RecvMsg()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	switch m := msg.(type) {
 	case *PnatInterfacesDetails:
-		return m, nil
+		return m, nil, nil
 	case *PnatInterfacesGetReply:
+		if err := api.RetvalToVPPApiError(m.Retval); err != nil {
+			return nil, nil, err
+		}
 		err = c.Stream.Close()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return nil, io.EOF
+		return nil, m, io.EOF
 	default:
-		return nil, fmt.Errorf("unexpected message: %T %v", m, m)
+		return nil, nil, fmt.Errorf("unexpected message: %T %v", m, m)
 	}
 }

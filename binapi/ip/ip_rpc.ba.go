@@ -20,6 +20,8 @@ type RPCService interface {
 	IPContainerProxyAddDel(ctx context.Context, in *IPContainerProxyAddDel) (*IPContainerProxyAddDelReply, error)
 	IPContainerProxyDump(ctx context.Context, in *IPContainerProxyDump) (RPCService_IPContainerProxyDumpClient, error)
 	IPDump(ctx context.Context, in *IPDump) (RPCService_IPDumpClient, error)
+	IPLocalReassEnableDisable(ctx context.Context, in *IPLocalReassEnableDisable) (*IPLocalReassEnableDisableReply, error)
+	IPLocalReassGet(ctx context.Context, in *IPLocalReassGet) (*IPLocalReassGetReply, error)
 	IPMrouteAddDel(ctx context.Context, in *IPMrouteAddDel) (*IPMrouteAddDelReply, error)
 	IPMrouteDump(ctx context.Context, in *IPMrouteDump) (RPCService_IPMrouteDumpClient, error)
 	IPMtableDump(ctx context.Context, in *IPMtableDump) (RPCService_IPMtableDumpClient, error)
@@ -231,6 +233,24 @@ func (c *serviceClient_IPDumpClient) Recv() (*IPDetails, error) {
 	}
 }
 
+func (c *serviceClient) IPLocalReassEnableDisable(ctx context.Context, in *IPLocalReassEnableDisable) (*IPLocalReassEnableDisableReply, error) {
+	out := new(IPLocalReassEnableDisableReply)
+	err := c.conn.Invoke(ctx, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, api.RetvalToVPPApiError(out.Retval)
+}
+
+func (c *serviceClient) IPLocalReassGet(ctx context.Context, in *IPLocalReassGet) (*IPLocalReassGetReply, error) {
+	out := new(IPLocalReassGetReply)
+	err := c.conn.Invoke(ctx, in, out)
+	if err != nil {
+		return nil, err
+	}
+	return out, api.RetvalToVPPApiError(out.Retval)
+}
+
 func (c *serviceClient) IPMrouteAddDel(ctx context.Context, in *IPMrouteAddDel) (*IPMrouteAddDelReply, error) {
 	out := new(IPMrouteAddDelReply)
 	err := c.conn.Invoke(ctx, in, out)
@@ -339,7 +359,7 @@ func (c *serviceClient) IPPathMtuGet(ctx context.Context, in *IPPathMtuGet) (RPC
 }
 
 type RPCService_IPPathMtuGetClient interface {
-	Recv() (*IPPathMtuDetails, error)
+	Recv() (*IPPathMtuDetails, *IPPathMtuGetReply, error)
 	api.Stream
 }
 
@@ -347,22 +367,25 @@ type serviceClient_IPPathMtuGetClient struct {
 	api.Stream
 }
 
-func (c *serviceClient_IPPathMtuGetClient) Recv() (*IPPathMtuDetails, error) {
+func (c *serviceClient_IPPathMtuGetClient) Recv() (*IPPathMtuDetails, *IPPathMtuGetReply, error) {
 	msg, err := c.Stream.RecvMsg()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	switch m := msg.(type) {
 	case *IPPathMtuDetails:
-		return m, nil
+		return m, nil, nil
 	case *IPPathMtuGetReply:
+		if err := api.RetvalToVPPApiError(m.Retval); err != nil {
+			return nil, nil, err
+		}
 		err = c.Stream.Close()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return nil, io.EOF
+		return nil, m, io.EOF
 	default:
-		return nil, fmt.Errorf("unexpected message: %T %v", m, m)
+		return nil, nil, fmt.Errorf("unexpected message: %T %v", m, m)
 	}
 }
 

@@ -108,7 +108,8 @@ func NewVppClient(socket string) *Client {
 		connectTimeout:    DefaultConnectTimeout,
 		disconnectTimeout: DefaultDisconnectTimeout,
 		headerPool: &sync.Pool{New: func() interface{} {
-			return make([]byte, 16)
+			x := make([]byte, 16)
+			return &x
 		}},
 		msgCallback: func(msgID uint16, data []byte) {
 			log.Debugf("no callback set, dropping message: ID=%v len=%d", msgID, len(data))
@@ -358,12 +359,11 @@ func (c *Client) SendMsg(context uint32, data []byte) error {
 //
 // Message request has following structure:
 //
-//    type msgRequestHeader struct {
-//        MsgID       uint16
-//        ClientIndex uint32
-//        Context     uint32
-//    }
-//
+//	type msgRequestHeader struct {
+//	    MsgID       uint16
+//	    ClientIndex uint32
+//	    Context     uint32
+//	}
 func setMsgRequestHeader(data []byte, clientIndex, context uint32) {
 	// message ID is already set
 	binary.BigEndian.PutUint32(data[2:6], clientIndex)
@@ -375,8 +375,11 @@ func (c *Client) writeMsg(msg []byte) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
-	header := c.headerPool.Get().([]byte)
-	err := writeMsgHeader(c.writer, header, len(msg))
+	header, ok := c.headerPool.Get().(*[]byte)
+	if !ok {
+		return fmt.Errorf("failed to get header from pool")
+	}
+	err := writeMsgHeader(c.writer, *header, len(msg))
 	if err != nil {
 		return err
 	}
@@ -464,11 +467,10 @@ func (c *Client) readerLoop() {
 //
 // Message reply has following structure:
 //
-//    type msgReplyHeader struct {
-//        MsgID       uint16
-//        Context     uint32
-//    }
-//
+//	type msgReplyHeader struct {
+//	    MsgID       uint16
+//	    Context     uint32
+//	}
 func getMsgReplyHeader(msg []byte) (msgID uint16, context uint32) {
 	msgID = binary.BigEndian.Uint16(msg[0:2])
 	context = binary.BigEndian.Uint32(msg[2:6])
@@ -499,14 +501,20 @@ func (c *Client) readMsgTimeout(buf []byte, timeout time.Duration) ([]byte, erro
 func (c *Client) readMsg(buf []byte) ([]byte, error) {
 	log.Debug("reading msg..")
 
-	header := c.headerPool.Get().([]byte)
-	msgLen, err := readMsgHeader(c.reader, header)
+	header, ok := c.headerPool.Get().(*[]byte)
+	if !ok {
+		return nil, fmt.Errorf("failed to get header from pool")
+	}
+	msgLen, err := readMsgHeader(c.reader, *header)
 	if err != nil {
 		return nil, err
 	}
 	c.headerPool.Put(header)
 
 	msg, err := readMsgData(c.reader, buf, msgLen)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Debugf(" -- readMsg done (buffered: %d)", c.reader.Buffered())
 

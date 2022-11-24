@@ -28,6 +28,7 @@ import (
 	"go.fd.io/govpp/adapter"
 	"go.fd.io/govpp/api"
 	"go.fd.io/govpp/codec"
+	"go.fd.io/govpp/core/genericpool"
 )
 
 const (
@@ -45,7 +46,11 @@ var (
 	HealthCheckProbeInterval = time.Second            // default health check probe interval
 	HealthCheckReplyTimeout  = time.Millisecond * 250 // timeout for reply to a health check probe
 	HealthCheckThreshold     = 2                      // number of failed health checks until the error is reported
-	DefaultReplyTimeout      = time.Second            // default timeout for replies from VPP
+)
+
+var (
+	DefaultReplyTimeout   = time.Duration(0) // default timeout for replies from VPP is disabled
+	WarnSlowReplyDuration = time.Second * 1  // duration of slow replies after which a warning is printed
 )
 
 // ConnectionState represents the current state of the connection to VPP.
@@ -105,13 +110,15 @@ type Connection struct {
 	connChan        chan ConnectionEvent // connection status events are sent to this channel
 	healthCheckDone chan struct{}        // used to terminate health check loop
 
-	codec        MessageCodec                      // message codec
-	msgIDs       map[string]uint16                 // map of message IDs indexed by message name + CRC
-	msgMapByPath map[string]map[uint16]api.Message // map of messages indexed by message ID which are indexed by path
+	codec  MessageCodec      // message codec
+	msgIDs map[string]uint16 // map of message IDs indexed by message name + CRC
 
-	channelsLock  sync.RWMutex        // lock for the channels map and the channel ID
-	nextChannelID uint16              // next potential channel ID (the real limit is 2^15)
-	channels      map[uint16]*Channel // map of all API channels indexed by the channel ID
+	msgMapByPathLock sync.RWMutex                      // lock for the msgMapByPath map
+	msgMapByPath     map[string]map[uint16]api.Message // map of messages indexed by message ID which are indexed by path
+
+	channelsLock sync.RWMutex        // lock for the channels map and the channel ID
+	channels     map[uint16]*Channel // map of all API channels indexed by the channel ID
+	channelPool  *genericpool.Pool[*Channel]
 
 	subscriptionsLock sync.RWMutex                  // lock for the subscriptions map
 	subscriptions     map[uint16][]*subscriptionCtx // map od all notification subscriptions indexed by message ID
@@ -154,6 +161,26 @@ func newConnection(binapi adapter.VppAPI, attempts int, interval time.Duration) 
 			mux:  &sync.Mutex{},
 		},
 	}
+
+	var nextChannelID uint32
+	c.channelPool = genericpool.New[*Channel](func() *Channel {
+		chID := atomic.AddUint32(&nextChannelID, 1)
+		if chID > 0x7fff {
+			return nil
+		}
+		// create new channel
+		return &Channel{
+			id:                  uint16(chID),
+			conn:                c,
+			msgCodec:            c.codec,
+			msgIdentifier:       c,
+			reqChan:             make(chan *vppRequest, RequestChanBufSize),
+			replyChan:           make(chan *vppReply, ReplyChanBufSize),
+			replyTimeout:        DefaultReplyTimeout,
+			receiveReplyTimeout: ReplyChannelTimeout,
+		}
+	})
+
 	binapi.SetMsgCallback(c.msgCallback)
 	return c
 }
@@ -273,6 +300,7 @@ func (c *Connection) releaseAPIChannel(ch *Channel) {
 	c.channelsLock.Lock()
 	delete(c.channels, ch.id)
 	c.channelsLock.Unlock()
+	go c.channelPool.Put(ch)
 }
 
 // connectLoop attempts to connect to VPP until it succeeds.
@@ -417,12 +445,17 @@ func (c *Connection) GetMessageID(msg api.Message) (uint16, error) {
 	if err != nil {
 		return 0, err
 	}
-	if pathMsgs, pathOk := c.msgMapByPath[pkgPath]; !pathOk {
-		c.msgMapByPath[pkgPath] = make(map[uint16]api.Message)
-		c.msgMapByPath[pkgPath][msgID] = msg
-	} else if _, msgOk := pathMsgs[msgID]; !msgOk {
-		c.msgMapByPath[pkgPath][msgID] = msg
-	}
+	func() {
+		c.msgMapByPathLock.Lock()
+		defer c.msgMapByPathLock.Unlock()
+
+		if pathMsgs, pathOk := c.msgMapByPath[pkgPath]; !pathOk {
+			c.msgMapByPath[pkgPath] = make(map[uint16]api.Message)
+			c.msgMapByPath[pkgPath][msgID] = msg
+		} else if _, msgOk := pathMsgs[msgID]; !msgOk {
+			c.msgMapByPath[pkgPath][msgID] = msg
+		}
+	}()
 	if _, ok := c.msgIDs[getMsgNameWithCrc(msg)]; ok {
 		return msgID, nil
 	}
@@ -435,6 +468,8 @@ func (c *Connection) LookupByID(path string, msgID uint16) (api.Message, error) 
 	if c == nil {
 		return nil, errors.New("nil connection passed in")
 	}
+	c.msgMapByPathLock.RLock()
+	defer c.msgMapByPathLock.RUnlock()
 	if msg, ok := c.msgMapByPath[path][msgID]; ok {
 		return msg, nil
 	}

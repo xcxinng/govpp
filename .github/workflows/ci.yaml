@@ -1,34 +1,100 @@
 ---
-name: ci
+name: CI
 on:
   push:
+    tags:
+      - v*
     branches:
       - master
+      - ci
   pull_request:
+  # Allows running this workflow manually
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  yamllint:
-    name: yamllint
+  yaml-lint:
+    name: lint yaml
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code into the Go module directory
+      - name: Checkout
         uses: actions/checkout@v3
-      - name: yaml-lint
+      - name: Lint YAML
         uses: karancode/yamllint-github-action@master
         with:
           yamllint_file_or_dir: '.github/ci/yamllint.yml'
           yamllint_strict: true
-  build:
-    name: build and test
-    runs-on: ${{ matrix.os }}
+  
+  go-mod:
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        go: [1.18]
+    name: check go.mod
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-go@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.18
-      - uses: actions/checkout@v3
+          go-version: ${{ matrix.go }}
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run go mod tidy
+        run: go mod tidy -v
+      - name: Check go.mod
+        run: |
+          git diff --exit-code go.mod
+      - name: Check go.sum
+        run: |
+          git diff --exit-code go.sum
+    
+  build-test:
+    strategy:
+      matrix:
+        go: [1.18]
+        os: [ubuntu-latest]
+    name: build and test
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Setup gotestsum
+        uses: autero1/action-gotestsum@v1.0.0
+        with:
+          gotestsum_version: 1.8.2
+      - name: Checkout
+        uses: actions/checkout@v3
       - name: Build
-        run: go build -race  ./...
+        run: go build -v ./...
       - name: Test
-        run: go test -race ./...
+        run: gotestsum --format testname --jsonfile test.json -- -race ./...
+      - name: Annotate tests
+        if: always()
+        uses: guyarb/golang-test-annotations@v0.6.0
+        with:
+          test-results: test.json
+
+  golangci:
+    strategy:
+      matrix:
+        go: [1.18]
+    name: lint go
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3  # docs: https://github.com/golangci/golangci-lint-action
+        with:
+          version: v1.50
+          args: --go="${{ matrix.go }}"

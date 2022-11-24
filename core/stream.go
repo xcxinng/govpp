@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"go.fd.io/govpp/api"
 )
 
@@ -87,6 +89,88 @@ func (c *Connection) Invoke(ctx context.Context, req api.Message, reply api.Mess
 		return err
 	}
 	return nil
+}
+
+type watcher struct {
+	conn   *Connection
+	ctx    context.Context
+	sub    *subscriptionCtx
+	events chan api.Message
+	cancel context.CancelFunc
+	quit   chan struct{}
+}
+
+func (w *watcher) Events() <-chan api.Message {
+	return w.events
+}
+
+func (w *watcher) Close() {
+	w.cancel()
+}
+
+func (w *watcher) watch() {
+	log.WithField("event", w.sub.event.GetMessageName()).Debugf("starting event watcher")
+	defer func() {
+		if err := w.sub.Unsubscribe(); err != nil {
+			log.Debugf("watcher unsubscribe error: %v", err)
+		}
+		close(w.events)
+		log.WithField("event", w.sub.event.GetMessageName()).Debugf("event watcher done")
+	}()
+
+	for {
+		select {
+		case <-w.ctx.Done():
+			return
+		case e := <-w.sub.notifChan:
+			// send to events
+			select {
+			case <-w.ctx.Done():
+				return
+			case w.events <- e:
+				// received by events
+			}
+		}
+	}
+}
+
+func (c *Connection) WatchEvent(ctx context.Context, event api.Message) (api.Watcher, error) {
+	msgID, err := c.GetMessageID(event)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"msg_name": event.GetMessageName(),
+			"msg_crc":  event.GetCrcString(),
+		}).Debugf("unable to retrieve event message ID: %v", err)
+		return nil, fmt.Errorf("unable to retrieve event message ID: %v", err)
+	}
+
+	cctx, cancel := context.WithCancel(ctx)
+
+	w := &watcher{
+		conn:   c,
+		ctx:    cctx,
+		cancel: cancel,
+		events: make(chan api.Message),
+		quit:   make(chan struct{}),
+	}
+
+	w.sub = &subscriptionCtx{
+		conn:       c,
+		notifChan:  make(chan api.Message, 10),
+		msgID:      msgID,
+		event:      event,
+		msgFactory: getMsgFactory(event),
+	}
+
+	go w.watch()
+
+	// add the subscription into map
+	c.subscriptionsLock.Lock()
+	defer c.subscriptionsLock.Unlock()
+
+	c.subscriptions[msgID] = append(c.subscriptions[msgID], w.sub)
+
+	return w, nil
 }
 
 func (s *Stream) Context() context.Context {
@@ -160,6 +244,11 @@ func (s *Stream) recvReply() (*vppReply, error) {
 	if s.conn == nil {
 		return nil, errors.New("stream closed")
 	}
+	timeout := s.replyTimeout
+	if timeout <= 0 {
+		timeout = maxInt64
+	}
+	timeoutTimer := time.NewTimer(timeout)
 	select {
 	case reply, ok := <-s.channel.replyChan:
 		if !ok {
@@ -172,7 +261,9 @@ func (s *Stream) recvReply() (*vppReply, error) {
 			return nil, reply.err
 		}
 		return reply, nil
-
+	case <-timeoutTimer.C:
+		err := fmt.Errorf("no reply received within the timeout period %s", timeout)
+		return nil, err
 	case <-s.ctx.Done():
 		return nil, s.ctx.Err()
 	}

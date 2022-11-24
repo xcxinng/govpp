@@ -81,7 +81,7 @@ type multiRequestCtx struct {
 
 // subscriptionCtx is a context of subscription for delivery of specific notification messages.
 type subscriptionCtx struct {
-	ch         *Channel
+	conn       *Connection
 	notifChan  chan api.Message   // channel where notification messages will be delivered to
 	msgID      uint16             // message ID for the subscribed event message
 	event      api.Message        // event message that this subscription is for
@@ -110,34 +110,22 @@ type Channel struct {
 }
 
 func (c *Connection) newChannel(reqChanBufSize, replyChanBufSize int) (*Channel, error) {
-	// create new channel
-	channel := &Channel{
-		conn:                c,
-		msgCodec:            c.codec,
-		msgIdentifier:       c,
-		reqChan:             make(chan *vppRequest, reqChanBufSize),
-		replyChan:           make(chan *vppReply, replyChanBufSize),
-		replyTimeout:        DefaultReplyTimeout,
-		receiveReplyTimeout: ReplyChannelTimeout,
+	// get a channel from the pool
+	channel := c.channelPool.Get()
+	if channel == nil {
+		return nil, errors.New("all channel IDs are in use")
+	}
+	if cap(channel.reqChan) != reqChanBufSize {
+		channel.reqChan = make(chan *vppRequest, reqChanBufSize)
+	}
+	if cap(channel.replyChan) != replyChanBufSize {
+		channel.replyChan = make(chan *vppReply, replyChanBufSize)
 	}
 
 	// store API channel within the client
 	c.channelsLock.Lock()
-	if len(c.channels) >= 0x7fff {
-		return nil, errors.New("all channel IDs are used")
-	}
-	for {
-		c.nextChannelID++
-		chID := c.nextChannelID & 0x7fff
-		_, ok := c.channels[chID]
-		if !ok {
-			channel.id = chID
-			c.channels[chID] = channel
-			break
-		}
-	}
+	c.channels[channel.id] = channel
 	c.channelsLock.Unlock()
-
 	return channel, nil
 }
 
@@ -201,7 +189,7 @@ func (ch *Channel) SubscribeNotification(notifChan chan api.Message, event api.M
 	}
 
 	sub := &subscriptionCtx{
-		ch:         ch,
+		conn:       ch.conn,
 		notifChan:  notifChan,
 		msgID:      msgID,
 		event:      event,
@@ -255,21 +243,23 @@ func (sub *subscriptionCtx) Unsubscribe() error {
 	}).Debug("Removing notification subscription.")
 
 	// remove the subscription from the map
-	sub.ch.conn.subscriptionsLock.Lock()
-	defer sub.ch.conn.subscriptionsLock.Unlock()
+	sub.conn.subscriptionsLock.Lock()
+	defer sub.conn.subscriptionsLock.Unlock()
 
-	for i, item := range sub.ch.conn.subscriptions[sub.msgID] {
+	for i, item := range sub.conn.subscriptions[sub.msgID] {
 		if item == sub {
 			// close notification channel
-			close(sub.ch.conn.subscriptions[sub.msgID][i].notifChan)
+			close(sub.conn.subscriptions[sub.msgID][i].notifChan)
 			// remove i-th item in the slice
-			sub.ch.conn.subscriptions[sub.msgID] = append(sub.ch.conn.subscriptions[sub.msgID][:i], sub.ch.conn.subscriptions[sub.msgID][i+1:]...)
+			sub.conn.subscriptions[sub.msgID] = append(sub.conn.subscriptions[sub.msgID][:i], sub.conn.subscriptions[sub.msgID][i+1:]...)
 			return nil
 		}
 	}
 
 	return fmt.Errorf("subscription for %q not found", sub.event.GetMessageName())
 }
+
+const maxInt64 = 1<<63 - 1
 
 // receiveReplyInternal receives a reply from the reply channel into the provided msg structure.
 func (ch *Channel) receiveReplyInternal(msg api.Message, expSeqNum uint16) (lastReplyReceived bool, err error) {
@@ -288,7 +278,13 @@ func (ch *Channel) receiveReplyInternal(msg api.Message, expSeqNum uint16) (last
 		}
 	}
 
-	timer := time.NewTimer(ch.replyTimeout)
+	slowReplyDur := WarnSlowReplyDuration
+	timeout := ch.replyTimeout
+	if timeout <= 0 {
+		timeout = maxInt64
+	}
+	timeoutTimer := time.NewTimer(timeout)
+	slowTimer := time.NewTimer(slowReplyDur)
 	for {
 		select {
 		// blocks until a reply comes to ReplyChan or until timeout expires
@@ -302,13 +298,18 @@ func (ch *Channel) receiveReplyInternal(msg api.Message, expSeqNum uint16) (last
 				continue
 			}
 			return lastReplyReceived, err
-
-		case <-timer.C:
+		case <-slowTimer.C:
 			log.WithFields(logrus.Fields{
 				"expSeqNum": expSeqNum,
 				"channel":   ch.id,
-			}).Debugf("timeout (%v) waiting for reply: %s", ch.replyTimeout, msg.GetMessageName())
-			err = fmt.Errorf("no reply received within the timeout period %s", ch.replyTimeout)
+			}).Warnf("reply is taking too long (>%v): %v ", slowReplyDur, msg.GetMessageName())
+			continue
+		case <-timeoutTimer.C:
+			log.WithFields(logrus.Fields{
+				"expSeqNum": expSeqNum,
+				"channel":   ch.id,
+			}).Debugf("timeout (%v) waiting for reply: %s", timeout, msg.GetMessageName())
+			err = fmt.Errorf("no reply received within the timeout period %s", timeout)
 			return false, err
 		}
 	}
@@ -386,4 +387,28 @@ func (ch *Channel) processReply(reply *vppReply, expSeqNum uint16, msg api.Messa
 	}
 
 	return
+}
+
+func (ch *Channel) Reset() {
+	if len(ch.reqChan) > 0 || len(ch.replyChan) > 0 {
+		log.WithField("channel", ch.id).Debugf("draining channel buffers (req: %d, reply: %d)", len(ch.reqChan), len(ch.replyChan))
+	}
+	// Drain any lingering items in the buffers
+	for empty := false; !empty; {
+		// channels must be set to nil when closed to prevent
+		// select below to always run the case immediatelly
+		// which would make the loop run forever
+		select {
+		case _, ok := <-ch.reqChan:
+			if !ok {
+				ch.reqChan = nil
+			}
+		case _, ok := <-ch.replyChan:
+			if !ok {
+				ch.replyChan = nil
+			}
+		default:
+			empty = true
+		}
+	}
 }
